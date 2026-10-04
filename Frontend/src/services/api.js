@@ -9,13 +9,12 @@ import axios from "axios";
 // ==========================================
 // AXIOS INSTANCE INITIALIZATION
 // ==========================================
-
+  
 // We prioritize Vite's environment variable for the base URL, but hardcode 
-// the live Render server as a fallback. This prevents the app from routing 
-// to localhost if Vercel encounters a timing issue during the build lifecycle 
-// and fails to inject the environment variable.
+// the live Render server as a fallback. Notice the "/api" at the very end 
+// of the URL. This is required to hit the correct backend routes.
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "https://personal-finance-tracker-api-57xw.onrender.com",
+  baseURL: import.meta.env.VITE_API_URL || "https://personal-finance-tracker-api-57xw.onrender.com/api",
 });
 
 // ==========================================
