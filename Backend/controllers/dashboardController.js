@@ -12,19 +12,26 @@ const getDashboardSummary = async (req, res) => {
   try {
     const userId = req.user._id;
     const userTz = req.query.timezone || 'UTC';
-    const categoryMonthMatch = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(req.query.categoryMonth || '');
+    const selectedMonthMatch = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(req.query.month || '');
 
-    if (req.query.categoryMonth && !categoryMonthMatch) {
-      return res.status(400).json({ success: false, message: 'categoryMonth must use YYYY-MM format' });
+    if (req.query.month && !selectedMonthMatch) {
+      return res.status(400).json({ success: false, message: 'month must use YYYY-MM format' });
     }
+
+    const selectedMonthNumber = selectedMonthMatch ? Number(selectedMonthMatch[2]) : null;
+    const selectedYear = selectedMonthMatch ? Number(selectedMonthMatch[1]) : null;
+    const selectedMonthExpr = selectedMonthMatch ? { $and: [
+      { $eq: [{ $month: { date: '$transactionDate', timezone: userTz } }, selectedMonthNumber] },
+      { $eq: [{ $year: { date: '$transactionDate', timezone: userTz } }, selectedYear] }
+    ] } : null;
 
     // Get Totals (Income, Expenses, Balance)
     const totals = await Transaction.aggregate([
       { $match: { user: userId } },
       { $group: {
           _id: null,
-          totalIncome: { $sum: { $cond: [{$eq: ["$type", "income"] }, "$amount", 0] } },
-          totalExpenses: { $sum: { $cond: [{$eq: ["$type", "expense"] }, "$amount", 0] } },
+          totalIncome: { $sum: { $cond: [{$and: [{$eq: ["$type", "income"]}, ...(selectedMonthExpr ? [selectedMonthExpr] : [])] }, "$amount", 0] } },
+          totalExpenses: { $sum: { $cond: [{$and: [{$eq: ["$type", "expense"]}, ...(selectedMonthExpr ? [selectedMonthExpr] : [])] }, "$amount", 0] } },
           currentMonthExpenses: { $sum: { $cond: [
             { $and: [
               { $eq: ["$type", "expense"] },
@@ -66,7 +73,11 @@ const getDashboardSummary = async (req, res) => {
     }, 0);
 
     // Get Recent Transactions (Limit 5)
-    const recentTransactions = await Transaction.find({ user: userId })
+    const recentQuery = { user: userId };
+    if (selectedMonthMatch) {
+      recentQuery.$expr = selectedMonthExpr;
+    }
+    const recentTransactions = await Transaction.find(recentQuery)
       .sort({ transactionDate: -1, createdAt: -1 })
       .limit(5)
       .populate('category', 'name color');
@@ -79,11 +90,11 @@ const getDashboardSummary = async (req, res) => {
           $expr: { $and: [
             { $eq: [
               { $month: { date: "$transactionDate", timezone: userTz } },
-              categoryMonthMatch ? Number(categoryMonthMatch[2]) : { $month: { date: "$$NOW", timezone: userTz } }
+              selectedMonthMatch ? selectedMonthNumber : { $month: { date: "$$NOW", timezone: userTz } }
             ] },
             { $eq: [
               { $year: { date: "$transactionDate", timezone: userTz } },
-              categoryMonthMatch ? Number(categoryMonthMatch[1]) : { $year: { date: "$$NOW", timezone: userTz } }
+              selectedMonthMatch ? selectedYear : { $year: { date: "$$NOW", timezone: userTz } }
             ] }
           ] }
         }
@@ -142,13 +153,14 @@ const getDashboardSummary = async (req, res) => {
 
     // Daily Trend Data (Last 30 Days) for Pop-Up Modals
     const now = new Date();
-    const thirtyDaysAgo = new Date(now);
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
     const dailyDataRaw = await Transaction.aggregate([
       { $match: { 
           user: userId,
-          transactionDate: { $gte: thirtyDaysAgo, $lte: now }
+          ...(selectedMonthMatch ? { $expr: selectedMonthExpr } : (() => {
+            const thirtyDaysAgo = new Date(now);
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            return { transactionDate: { $gte: thirtyDaysAgo, $lte: now } };
+          })())
         } 
       },
       { $group: {
