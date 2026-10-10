@@ -33,6 +33,20 @@ dotenv.config();
 
 const app = express();
 
+// This API authenticates with bearer tokens, so it does not need cookie
+// credentials. Reflect the request origin so the Vercel app, local frontend,
+// and Vercel preview deployments can call the API.
+const corsOptions = {
+  origin: true,
+  methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+  optionsSuccessStatus: 204,
+  maxAge: 86400,
+};
+
+// cors() answers OPTIONS preflight requests here, before Helmet, rate limiting,
+// and route handlers can reject or otherwise alter the response.
+app.use(cors(corsOptions));
+
 // ==============================================================
 // MIDDLEWARE SETUP & SECURITY
 // ==============================================================
@@ -50,7 +64,6 @@ const apiLimiter = rateLimit({
   }
 });
 
-app.use(cors()); // Enables Cross-Origin Resource Sharing for the React frontend
 app.use(express.json()); // Parses incoming JSON payloads in request bodies
 app.use("/api", apiLimiter); // Applies rate limiting to all /api routes
 app.use('/api/alerts', require('./routes/alertRoutes'));
