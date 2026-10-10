@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import api from "../services/api";
+import { useSelectedMonth } from "../context/MonthContext";
 import { formatDateOnly, getToday, toDateInputValue } from "../utils/dates";
 
 // ==============================================================
@@ -69,7 +70,12 @@ const fetchTransactionCategories = async () => {
 
 const Transactions = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { setSelectedMonth } = useSelectedMonth();
   const selectedMonth = searchParams.get("month") || "";
+
+  useEffect(() => {
+    if (selectedMonth) setSelectedMonth(selectedMonth);
+  }, [selectedMonth, setSelectedMonth]);
 
   // --- State Management ---
   const [transactions, setTransactions] = useState([]);

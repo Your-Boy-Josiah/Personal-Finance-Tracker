@@ -7,6 +7,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
+import { MonthProvider } from "./context/MonthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
 
@@ -35,8 +36,9 @@ export default function App() {
   return (
     <AuthProvider>
       <ThemeProvider>
-        <BrowserRouter>
-          <Routes>
+        <MonthProvider>
+          <BrowserRouter>
+            <Routes>
           <Route path="/" element={<Landing />} />
           {/* ================================================== */}
           {/* PUBLIC ROUTES */}
@@ -69,8 +71,9 @@ export default function App() {
 
           {/* Catch-all route for invalid URLs */}
           <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </BrowserRouter>
+            </Routes>
+          </BrowserRouter>
+        </MonthProvider>
       </ThemeProvider>
     </AuthProvider>
   );

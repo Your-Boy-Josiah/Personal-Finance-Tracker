@@ -31,10 +31,12 @@ class AdvisoryService {
     return 'miscellaneous';
   }
 
-  async getAdvice(userId) {
+  async getAdvice(userId, month = null, timezone = 'UTC') {
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const selectedMonth = month || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const [year, monthNumber] = selectedMonth.split('-').map(Number);
+    const monthStart = new Date(Date.UTC(year, monthNumber - 1, 1));
+    const nextMonthStart = new Date(Date.UTC(year, monthNumber, 1));
 
     const [budget, transactions] = await Promise.all([
       Budget.findOne({ user: userId }).populate({
@@ -45,7 +47,10 @@ class AdvisoryService {
       Transaction.find({
         user: userId,
         type: 'expense',
-        transactionDate: { $gte: monthStart,$lt: nextMonthStart },
+        $expr: { $and: [
+          { $eq: [{ $month: { date: '$transactionDate', timezone } }, monthNumber] },
+          { $eq: [{ $year: { date: '$transactionDate', timezone } }, year] },
+        ] },
       }).populate('category', 'name type color'),
     ]);
 
@@ -152,7 +157,7 @@ class AdvisoryService {
     }
 
     return {
-      period: { start: monthStart, end: nextMonthStart },
+      period: { month: selectedMonth, start: monthStart, end: nextMonthStart },
       classificationTotals,
       categoryTotals: Array.from(categoryTotals.values()),
       overspentCategories,

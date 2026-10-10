@@ -10,6 +10,7 @@ import {
   PieChart, BrainCircuit, Activity, CalendarClock, Target
 } from "lucide-react";
 import api from "../services/api";
+import { useSelectedMonth } from "../context/MonthContext";
 import { PageSkeleton } from "../components/LoadingState";
 
 // ==============================================================
@@ -28,6 +29,7 @@ const formatAmount = (amount) => {
 // ==============================================================
 
 const BudgetAdvisory = () => {
+  const { selectedMonth } = useSelectedMonth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -37,7 +39,9 @@ const BudgetAdvisory = () => {
     const fetchAdvisory = async () => {
       try {
         setLoading(true);
-        const response = await api.get("/budget/advisory");
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const params = new URLSearchParams({ month: selectedMonth, timezone });
+        const response = await api.get(`/budget/advisory?${params.toString()}`);
         if (isCurrent) {
           setData(response.data);
           setError("");
@@ -50,12 +54,17 @@ const BudgetAdvisory = () => {
     };
     fetchAdvisory();
     return () => { isCurrent = false; };
-  }, []);
+  }, [selectedMonth]);
 
   // --- Financial health calculations ---
   const today = new Date();
-  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-  const daysLeft = daysInMonth - today.getDate() + 1; // Inclusive of today
+  const [selectedYear, selectedMonthNumber] = selectedMonth.split("-").map(Number);
+  const daysInMonth = new Date(selectedYear, selectedMonthNumber, 0).getDate();
+  const isSelectedMonthCurrent = selectedYear === today.getFullYear() && selectedMonthNumber === today.getMonth() + 1;
+  const isSelectedMonthFuture = selectedYear > today.getFullYear() || (selectedYear === today.getFullYear() && selectedMonthNumber > today.getMonth() + 1);
+  const daysLeft = isSelectedMonthFuture ? daysInMonth : isSelectedMonthCurrent ? daysInMonth - today.getDate() + 1 : 0;
+  const monthElapsed = isSelectedMonthFuture ? 0 : isSelectedMonthCurrent ? today.getDate() / daysInMonth : 1;
+  const selectedMonthLabel = new Date(selectedYear, selectedMonthNumber - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
 
   const healthScore = useMemo(() => {
     if (!data) return null;
@@ -104,7 +113,7 @@ const BudgetAdvisory = () => {
           </p>
           <h1 className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">Financial Advisory</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-neutral-400">
-            Actionable insights and dynamic pacing for {today.toLocaleString('default', { month: 'long', year: 'numeric' })}.
+            Actionable insights and spending advice for {selectedMonthLabel}.
           </p>
         </div>
       </header>
@@ -139,13 +148,13 @@ const BudgetAdvisory = () => {
               </div>
               <div className="text-right">
                 <p className="text-xl font-bold text-slate-900 dark:text-white">
-                  {Math.round((today.getDate() / daysInMonth) * 100)}%
+                  {Math.round(monthElapsed * 100)}%
                 </p>
                 <p className="text-xs font-medium text-slate-500 dark:text-neutral-400">Month Elapsed</p>
               </div>
             </div>
             <div className="mt-3 h-1.5 w-full rounded-full bg-slate-100 dark:bg-neutral-800 overflow-hidden">
-              <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${(today.getDate() / daysInMonth) * 100}%` }}></div>
+              <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${monthElapsed * 100}%` }}></div>
             </div>
           </div>
         </div>
@@ -188,7 +197,7 @@ const BudgetAdvisory = () => {
           <div className="space-y-3">
             {advice.length === 0 ? (
               <div className="rounded-xl border border-slate-200 bg-white p-5 text-center text-sm text-slate-500 dark:border-neutral-800 dark:bg-[#0a0a0a] sm:p-8">
-                Not enough transaction data this month to generate an AI behavior profile.
+                Not enough transaction data for {selectedMonthLabel} to generate an AI behavior profile.
               </div>
             ) : (
               advice.map((item, index) => {
@@ -263,7 +272,9 @@ const BudgetAdvisory = () => {
                     <div className="mt-3 rounded bg-rose-50 p-2.5 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-900/30">
                       <p className="text-xs font-semibold text-rose-700 dark:text-rose-400 flex items-start gap-1.5">
                         <Info size={14} className="shrink-0 mt-0.5" />
-                        With {daysLeft} days left in the month, you must pause all spending in this category immediately to prevent further account drain.
+                        {daysLeft > 0
+                          ? `With ${daysLeft} days left in ${selectedMonthLabel}, pause spending in this category to avoid exceeding the cap further.`
+                          : `This category exceeded its cap in ${selectedMonthLabel}. Review the transactions to understand the overage.`}
                       </p>
                     </div>
                   </div>

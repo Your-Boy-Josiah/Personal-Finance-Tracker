@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
+import { useSelectedMonth } from "../context/MonthContext";
 import { 
   LayoutDashboard, Target, FolderPlus, ArrowRightLeft, 
   TrendingUp, Settings, UserCircle, LogOut, Wallet, 
@@ -23,6 +24,7 @@ const DEFAULT_WIDTH = 256;
 export default function Layout() {
   const { logout } = useAuth();
   const { isDark, toggleTheme } = useTheme();
+  const { selectedMonth } = useSelectedMonth();
   const location = useLocation();
   
   // --- Resizable Sidebar State ---
@@ -126,7 +128,7 @@ export default function Layout() {
     { name: "Dash-Board", path: "/app", icon: LayoutDashboard },
     { name: "Set Budget", path: "/app/budget", icon: Target },
     { name: "Create Category", path: "/app/categories", icon: FolderPlus },
-    { name: "View Transactions", path: "/app/transactions", icon: ArrowRightLeft },
+    { name: "View Transactions", path: `/app/transactions?month=${selectedMonth}`, icon: ArrowRightLeft },
     { name: "View Advisory", path: "/app/advisory", icon: TrendingUp },
     { name: "Settings", path: "/app/settings", icon: Settings },
     { name: "Account", path: "/app/account", icon: UserCircle },
@@ -182,7 +184,7 @@ export default function Layout() {
         <nav className="flex-1 space-y-1 overflow-x-hidden overflow-y-auto px-2 md:px-3 scrollbar-hide">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = location.pathname === item.path;
+            const isActive = location.pathname === item.path.split("?")[0];
             return (
               <Link 
                 key={item.name} 

@@ -8,6 +8,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import { useSelectedMonth } from "../context/MonthContext";
 import { getAvatarUrl } from "../utils/avatar";
 import { formatDateOnly, getToday } from "../utils/dates";
 import { 
@@ -55,6 +56,7 @@ const MemoizedPieChart = React.memo(({ data, isEmpty, onPieClick }) => (
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { selectedMonth: selectedDashboardMonth, setSelectedMonth } = useSelectedMonth();
   
   // Data States
   const [summary, setSummary] = useState(null);
@@ -67,10 +69,6 @@ export default function Dashboard() {
   const [pieModalData, setPieModalData] = useState(null); 
   const [showCalendar, setShowCalendar] = useState(false);
   const [isBlurred, setIsBlurred] = useState(false); 
-  const [selectedDashboardMonth, setSelectedDashboardMonth] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  });
   
   // Quick Action & Sync States
   const [quickAction, setQuickAction] = useState(null);
@@ -79,10 +77,10 @@ export default function Dashboard() {
   const [isSubmittingQuick, setIsSubmittingQuick] = useState(false);
   const [quickForm, setQuickForm] = useState({ amount: "", category: "", subCategory: "", description: "" });
 
-  const fetchDashboardData = async (categoryMonth = selectedDashboardMonth) => {
+  const fetchDashboardData = async (month = selectedDashboardMonth) => {
     try {
       const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const params = new URLSearchParams({ timezone: userTz, categoryMonth });
+      const params = new URLSearchParams({ timezone: userTz, month });
       const [dashRes, catRes] = await Promise.all([
         api.get(`/dashboard/summary?${params.toString()}`),
         api.get('/categories')
@@ -145,7 +143,7 @@ export default function Dashboard() {
   // --- Core Metrics Math ---
   const income = summary?.totalIncome || 0;
   const expenses = summary?.totalExpenses || 0;
-  const budgetExpenses = summary?.currentMonthExpenses ?? expenses;
+  const budgetExpenses = expenses;
   const netProfit = income - expenses; 
   
   const realBudgetLimit = summary?.totalBudgetLimit || 0;
@@ -156,8 +154,10 @@ export default function Dashboard() {
   const recentTransactions = summary?.recentTransactions || [];
   const dailyData = summary?.dailyData || [];
   const now = new Date();
-  const currentMonthName = now.toLocaleString('default', { month: 'short' });
-  const currentYear = now.getFullYear();
+  const selectedMonthNumber = Number(selectedDashboardMonth.slice(5, 7));
+  const selectedYear = Number(selectedDashboardMonth.slice(0, 4));
+  const currentMonthName = new Date(selectedYear, selectedMonthNumber - 1).toLocaleString('default', { month: 'short' });
+  const currentYear = selectedYear;
   const currentYearData = summary?.monthlyData?.filter(month => month.year === currentYear) || [];
   const barData = currentYearData.length > 0
     ? currentYearData
@@ -165,14 +165,13 @@ export default function Dashboard() {
 
   const isCategoryEmpty = !summary?.categorySpending?.length;
   const categoryData = isCategoryEmpty ? [{ name: 'No Data', value: 1 }] : summary.categorySpending;
-  const selectedMonthNumber = Number(selectedDashboardMonth.slice(5, 7));
-  const selectedMonthName = new Date(currentYear, selectedMonthNumber - 1).toLocaleString('default', { month: 'short' });
-  const selectedMonthData = summary?.monthlyData?.find(month => month.year === currentYear && month.monthNumber === selectedMonthNumber);
+  const selectedMonthName = new Date(selectedYear, selectedMonthNumber - 1).toLocaleString('default', { month: 'short' });
+  const selectedMonthData = summary?.monthlyData?.find(month => month.year === selectedYear && month.monthNumber === selectedMonthNumber);
   const availableBalance = (selectedMonthData?.income || 0) - (selectedMonthData?.expenses || 0);
 
   const selectDashboardMonth = (monthNumber) => {
     const monthKey = `${currentYear}-${String(monthNumber).padStart(2, '0')}`;
-    setSelectedDashboardMonth(monthKey);
+    setSelectedMonth(monthKey);
     setShowCalendar(false);
     fetchDashboardData(monthKey);
   };
@@ -228,18 +227,18 @@ export default function Dashboard() {
           <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-neutral-800 dark:bg-[#0a0a0a] sm:p-6" onClick={e => e.stopPropagation()}>
             <div className="mb-6 flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold dark:text-white">{modalConfig[activeModal].title}</h2>
+                <h2 className="text-xl font-bold dark:text-white">{modalConfig[activeModal].title} · {selectedMonthName} {selectedYear}</h2>
                 <p className="mt-1 text-xs text-slate-500 dark:text-neutral-400">
                   {dailyData.length > 0
                     ? `${dailyData[0].date} – ${dailyData[dailyData.length - 1].date}`
-                    : "No transactions available in the last 30 days"}
+                    : `No transactions available in ${selectedMonthName} ${selectedYear}`}
                 </p>
               </div>
               <button onClick={() => setActiveModal(null)} className="rounded-full p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-neutral-800 dark:hover:text-white transition-colors"><X size={20} /></button>
             </div>
             <div className="h-64 w-full sm:h-100">
               {dailyData.length === 0 ? (
-                <div className="flex h-full items-center justify-center text-sm text-slate-500">No transactions available in the last 30 days.</div>
+                <div className="flex h-full items-center justify-center text-sm text-slate-500">No transactions available in {selectedMonthName} {selectedYear}.</div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={dailyData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
@@ -418,17 +417,17 @@ export default function Dashboard() {
         <div className="xl:col-span-8 space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div onClick={() => setActiveModal('revenue')} className="group bg-white dark:bg-[#0a0a0a] p-4 rounded-xl border border-slate-200 dark:border-neutral-800 shadow-sm cursor-pointer hover:-translate-y-1 hover:shadow-md hover:border-emerald-500/30 transition-all duration-300">
-              <p className="text-xs font-medium text-slate-500 dark:text-neutral-400">Total revenue</p>
+              <p className="text-xs font-medium text-slate-500 dark:text-neutral-400">Revenue · {selectedMonthName} {selectedYear}</p>
               <h3 className={`text-xl font-bold mt-1 text-slate-900 dark:text-white group-hover:text-emerald-500 transition-colors ${isBlurred ? 'filter blur-sm select-none' : ''}`}>{blurText(formatCurrency(income))}</h3>
             </div>
             
             <div onClick={() => setActiveModal('expenses')} className="group bg-white dark:bg-[#0a0a0a] p-4 rounded-xl border border-slate-200 dark:border-neutral-800 shadow-sm cursor-pointer hover:-translate-y-1 hover:shadow-md hover:border-rose-500/30 transition-all duration-300">
-              <p className="text-xs font-medium text-slate-500 dark:text-neutral-400">Total expenses</p>
+              <p className="text-xs font-medium text-slate-500 dark:text-neutral-400">Expenses · {selectedMonthName} {selectedYear}</p>
               <h3 className={`text-xl font-bold mt-1 text-slate-900 dark:text-white group-hover:text-rose-500 transition-colors ${isBlurred ? 'filter blur-sm select-none' : ''}`}>{blurText(formatCurrency(expenses))}</h3>
             </div>
             
             <div onClick={() => setActiveModal('profit')} className="group bg-white dark:bg-[#0a0a0a] p-4 rounded-xl border border-slate-200 dark:border-neutral-800 shadow-sm cursor-pointer hover:-translate-y-1 hover:shadow-md hover:border-indigo-500/30 transition-all duration-300">
-              <p className="text-xs font-medium text-slate-500 dark:text-neutral-400">Net profit</p>
+              <p className="text-xs font-medium text-slate-500 dark:text-neutral-400">Net profit · {selectedMonthName} {selectedYear}</p>
               <div className="flex items-center gap-2 mt-1">
                 <h3 className={`text-xl font-bold transition-colors ${netProfit > 0 ? 'text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-300' : netProfit < 0 ? 'text-rose-600 dark:text-rose-400 group-hover:text-rose-500' : 'text-slate-600 dark:text-neutral-300'} ${isBlurred ? 'filter blur-sm select-none' : ''}`}>{blurText(formatCurrency(netProfit))}</h3>
                 {netProfit > 0 && <TrendingUp size={16} className="text-emerald-500" />}
@@ -457,12 +456,12 @@ export default function Dashboard() {
 
           <div className="bg-white dark:bg-[#0a0a0a] rounded-xl border border-slate-200 dark:border-neutral-800 shadow-sm overflow-hidden hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
             <div className="p-4 border-b border-slate-100 dark:border-neutral-800 flex justify-between items-center">
-              <h3 className="text-sm font-bold dark:text-white">Recent transactions</h3>
-              <Link to="/app/transactions" className="text-indigo-600 dark:text-indigo-400 text-xs font-medium hover:underline">View all</Link>
+              <h3 className="text-sm font-bold dark:text-white">Recent transactions · {selectedMonthName} {selectedYear}</h3>
+              <Link to={`/app/transactions?month=${selectedDashboardMonth}`} className="text-indigo-600 dark:text-indigo-400 text-xs font-medium hover:underline">View all</Link>
             </div>
             <div className="divide-y divide-slate-100 dark:divide-neutral-800/50">
               {recentTransactions.map((tx) => (
-                <div key={tx._id} className="flex items-center justify-between gap-3 px-4 py-3 transition-colors cursor-pointer hover:bg-slate-50 dark:hover:bg-neutral-900" onClick={() => navigate('/app/transactions')}>
+                <div key={tx._id} className="flex items-center justify-between gap-3 px-4 py-3 transition-colors cursor-pointer hover:bg-slate-50 dark:hover:bg-neutral-900" onClick={() => navigate(`/app/transactions?month=${selectedDashboardMonth}`)}>
                   <div className="flex min-w-0 items-center gap-3">
                     <div className="w-8 h-8 rounded bg-slate-100 dark:bg-neutral-800 flex items-center justify-center text-xs font-bold" style={{ color: tx.category?.color || '#8b5cf6' }}>
                       {tx.category?.name?.charAt(0) || '?'}
@@ -524,7 +523,7 @@ export default function Dashboard() {
 
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg dark:border-neutral-800 dark:bg-[#0a0a0a] sm:p-5">
             <div className="flex justify-between items-center mb-2">
-              <h3 className="text-sm font-bold dark:text-white">Monthly Budget</h3>
+              <h3 className="text-sm font-bold dark:text-white">Monthly Budget · {selectedMonthName} {selectedYear}</h3>
               <Link to="/app/budget" className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline">Manage</Link>
             </div>
             {!hasBudgetLimit ? (
